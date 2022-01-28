@@ -113,6 +113,99 @@ class MonoDataset(data.Dataset):
     def load_intrinsics(self, folder, frame_index):
         return self.K.copy()
 
+    # def get_item_by_path(self, path):
+    #     """Returns a single training item from the dataset as a dictionary #! BY MAPPING OF KITTI OBJECT DATA.
+
+    #     Values correspond to torch tensors.
+    #     Keys in the dictionary are either strings or tuples:
+
+    #         ("color", <frame_id>, <scale>)          for raw colour images,
+    #         ("color_aug", <frame_id>, <scale>)      for augmented colour images,
+    #         ("K", scale) or ("inv_K", scale)        for camera intrinsics,
+    #         "depth_gt"                              for ground truth depth maps
+
+    #     <frame_id> is:
+    #         an integer (e.g. 0, -1, or 1) representing the temporal step relative to 'index',
+
+    #     <scale> is an integer representing the scale of the image relative to the fullsize image:
+    #         -1      images at native resolution as loaded from disk
+    #         0       images resized to (self.width,      self.height     )
+    #         1       images resized to (self.width // 2, self.height // 2)
+    #         2       images resized to (self.width // 4, self.height // 4)
+    #         3       images resized to (self.width // 8, self.height // 8)
+    #     """
+    #     inputs = {}
+
+    #     do_color_aug = self.is_train and random.random() > 0.5
+    #     do_flip = self.is_train and random.random() > 0.5
+
+    #     folder, frame_index, side = self.index_to_folder_and_frame_idx(index)
+
+    #     poses = {}
+    #     if type(self).__name__ in ["CityscapesPreprocessedDataset", "CityscapesEvalDataset"]:
+    #         inputs.update(self.get_colors(folder, frame_index, side, do_flip))
+    #     else:
+    #         for i in self.frame_idxs:
+    #             if i == "s":
+    #                 other_side = {"r": "l", "l": "r"}[side]
+    #                 inputs[("color", i, -1)] = self.get_color(
+    #                     folder, frame_index, other_side, do_flip)
+    #             else:
+    #                 try:
+    #                     inputs[("color", i, -1)] = self.get_color(
+    #                         folder, frame_index + i, side, do_flip)
+    #                 except FileNotFoundError as e:
+    #                     if i != 0:
+    #                         # fill with dummy values
+    #                         inputs[("color", i, -1)] = \
+    #                             Image.fromarray(np.zeros((100, 100, 3)).astype(np.uint8))
+    #                         poses[i] = None
+    #                     else:
+    #                         raise FileNotFoundError(f'Cannot find frame - make sure your '
+    #                                                 f'--data_path is set correctly, or try adding'
+    #                                                 f' the --png flag. {e}')
+
+    #     # adjusting intrinsics to match each scale in the pyramid
+    #     for scale in range(self.num_scales):
+    #         K = self.load_intrinsics(folder, frame_index)
+
+    #         K[0, :] *= self.width // (2 ** scale)
+    #         K[1, :] *= self.height // (2 ** scale)
+
+    #         inv_K = np.linalg.pinv(K)
+
+    #         inputs[("K", scale)] = torch.from_numpy(K)
+    #         inputs[("inv_K", scale)] = torch.from_numpy(inv_K)
+
+    #     if do_color_aug:
+    #         color_aug = transforms.ColorJitter.get_params(
+    #             self.brightness, self.contrast, self.saturation, self.hue)
+    #     else:
+    #         color_aug = (lambda x: x)
+
+    #     self.preprocess(inputs, color_aug)
+
+    #     for i in self.frame_idxs:
+    #         del inputs[("color", i, -1)]
+    #         del inputs[("color_aug", i, -1)]
+
+    #     if self.load_depth and False:
+    #         depth_gt = self.get_depth(folder, frame_index, side, do_flip)
+    #         inputs["depth_gt"] = np.expand_dims(depth_gt, 0)
+    #         inputs["depth_gt"] = torch.from_numpy(inputs["depth_gt"].astype(np.float32))
+
+    #     return inputs
+
+    # def get_color(self, folder, frame_index, side, do_flip):
+    #     raise NotImplementedError
+
+    # def check_depth(self):
+    #     raise NotImplementedError
+
+    # def get_depth(self, folder, frame_index, side, do_flip):
+    #     raise NotImplementedError
+
+
     def __getitem__(self, index):
         """Returns a single training item from the dataset as a dictionary.
 

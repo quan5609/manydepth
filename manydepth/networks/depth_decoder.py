@@ -59,5 +59,11 @@ class DepthDecoder(nn.Module):
             x = self.convs[("upconv", i, 1)](x)
             if i in self.scales:
                 self.outputs[("disp", i)] = self.sigmoid(self.convs[("dispconv", i)](x))
+        
+        # for feat in input_features:
+        #     print(feat.shape)
 
+        # for out in self.outputs.values():
+        #     print(out.shape)
+        # return
         return self.outputs

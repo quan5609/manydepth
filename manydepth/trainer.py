@@ -28,6 +28,11 @@ from .layers import SSIM, BackprojectDepth, Project3D, transformation_from_param
 from manydepth import datasets, networks
 import matplotlib.pyplot as plt
 
+from MonoFlex.data import make_data_loader
+from MonoFlex.config import cfg as obj_cfg
+obj_cfg.merge_from_file('MonoFlex/runs/monoflex.yaml')
+from MonoFlex.tools.plain_train_net import train as obj_trainer
+
 
 _DEPTH_COLORMAP = plt.get_cmap('plasma', 256)  # for plotting
 
@@ -88,12 +93,20 @@ class Trainer:
             depth_binning=self.opt.depth_binning, num_depth_bins=self.opt.num_depth_bins)
         self.models["encoder"].to(self.device)
 
-        self.models["depth"] = networks.DepthDecoder(
+        self.models["depth"] = networks.OBJDecoder(
             self.models["encoder"].num_ch_enc, self.opt.scales)
         self.models["depth"].to(self.device)
 
         self.parameters_to_train += list(self.models["encoder"].parameters())
-        self.parameters_to_train += list(self.models["depth"].parameters())
+        self.parameters_to_train += list(self.models["depth"].decoder.parameters())
+
+        # self.models["detector"] = networks.OBJDecoder(
+        #     self.models["encoder"].num_ch_enc, self.opt.scales)
+        # self.models["detector"].to(self.device)
+
+        # self.parameters_to_train += list(self.models["detector"].parameters())
+        # self.parameters_to_train += list(self.models["detector"].parameters())
+
 
         self.models["mono_encoder"] = \
             networks.ResnetEncoder(18, self.opt.weights_init == "pretrained")
@@ -143,6 +156,7 @@ class Trainer:
         self.dataset = datasets_dict[self.opt.dataset]
 
         fpath = os.path.join("splits", self.opt.split, "{}_files.txt")
+        # fpath = os.path.join("splits/", "{}_files.txt")
         train_filenames = readlines(fpath.format("train"))
         val_filenames = readlines(fpath.format("val"))
         img_ext = '.png' if self.opt.png else '.jpg'
@@ -164,6 +178,9 @@ class Trainer:
             val_dataset, self.opt.batch_size, True,
             num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
         self.val_iter = iter(self.val_loader)
+
+        # Object dataloader
+        self.object_data_loader = make_data_loader(obj_cfg, is_train= True)
 
         self.writers = {}
         for mode in ["train", "val"]:
@@ -220,13 +237,30 @@ class Trainer:
         self.epoch = 0
         self.step = 0
         self.start_time = time.time()
-        for self.epoch in range(self.opt.num_epochs):
-            if self.epoch == self.opt.freeze_teacher_epoch:
-                self.freeze_teacher()
 
-            self.run_epoch()
-            if (self.epoch + 1) % self.opt.save_frequency == 0:
-                self.save_model()
+        # Train depth network
+        # for self.epoch in range(self.opt.num_epochs):
+        #     if self.epoch == self.opt.freeze_teacher_epoch:
+        #         self.freeze_teacher()
+
+        #     self.run_epoch()
+        #     if (self.epoch + 1) % self.opt.save_frequency == 0:
+        #         self.save_model()
+
+        # Train obj head
+        # print('START TRAINING OBJECT DETECTION....')
+        self.freeze_teacher() # freeze teacher network for training obj heads
+        self.object_train()
+        
+    def object_train(self):
+        self.student_models = {}
+        self.teacher_models = {}
+        for k,v in self.models.items():
+            if k in ['depth', 'encoder']:
+                self.student_models[k] = v
+            else:
+                self.teacher_models[k] = v
+        obj_trainer(obj_cfg, self.student_models, self.teacher_models, self.device, False)
 
     def freeze_teacher(self):
         if self.train_teacher_and_pose:
@@ -237,7 +271,7 @@ class Trainer:
             # teacher and pose networks
             self.parameters_to_train = []
             self.parameters_to_train += list(self.models["encoder"].parameters())
-            self.parameters_to_train += list(self.models["depth"].parameters())
+            self.parameters_to_train += list(self.models["depth"].decoder.parameters())
             self.model_optimizer = optim.Adam(self.parameters_to_train, self.opt.learning_rate)
             self.model_lr_scheduler = optim.lr_scheduler.StepLR(
                 self.model_optimizer, self.opt.scheduler_step_size, 0.1)
@@ -364,6 +398,9 @@ class Trainer:
                                                                         min_depth_bin=min_depth_bin,
                                                                         max_depth_bin=max_depth_bin)
         outputs.update(self.models["depth"](features))
+
+        # ! Detector
+        # self.models["detector"](features)
 
         outputs["lowest_cost"] = F.interpolate(lowest_cost.unsqueeze(1),
                                                [self.opt.height, self.opt.width],
