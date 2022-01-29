@@ -903,16 +903,16 @@ class Trainer:
             self.models[n].load_state_dict(model_dict)
 
         # loading adam state
-        optimizer_load_path = os.path.join(self.opt.load_weights_folder, "adam.pth")
-        if os.path.isfile(optimizer_load_path):
-            try:
-                print("Loading Adam weights")
-                optimizer_dict = torch.load(optimizer_load_path)
-                self.model_optimizer.load_state_dict(optimizer_dict)
-            except ValueError:
-                print("Can't load Adam - using random")
-        else:
-            print("Cannot find Adam weights so Adam is randomly initialized")
+        # optimizer_load_path = os.path.join(self.opt.load_weights_folder, "adam.pth")
+        # if os.path.isfile(optimizer_load_path):
+        #     try:
+        #         print("Loading Adam weights")
+        #         optimizer_dict = torch.load(optimizer_load_path)
+        #         self.model_optimizer.load_state_dict(optimizer_dict)
+        #     except ValueError:
+        #         print("Can't load Adam - using random")
+        # else:
+        #     print("Cannot find Adam weights so Adam is randomly initialized")
 
 
 def colormap(inputs, normalize=True, torch_transpose=True):

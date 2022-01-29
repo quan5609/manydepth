@@ -99,12 +99,19 @@ def do_train(
 
 	default_depth_method = cfg.MODEL.HEAD.OUTPUT_DEPTH
 	grad_norm_clip = cfg.SOLVER.GRAD_NORM_CLIP
-
+	# print(model.keys())
 
 	# !manydepth objects
 	frames_to_load = [0,-1]
 	pose_enc = teacher_model['pose_encoder']
 	pose_dec = teacher_model['pose']
+	pose_enc.train()
+	pose_dec.train()
+	for p in pose_enc.parameters():
+		p.requires_grad == False
+
+	for p in pose_dec.parameters():
+		p.requires_grad == False
 
 	if comm.get_local_rank() == 0:
 		writer = SummaryWriter(os.path.join(cfg.OUTPUT_DIR, 'writer/{}/'.format(cfg.START_TIME)))
@@ -262,6 +269,8 @@ def do_train(
 				)
 			)
 
+		if comm.get_rank() == 0:
+			checkpointer.save("model_checkpoint_last", **arguments)
 
 		if iteration % cfg.SOLVER.SAVE_CHECKPOINT_INTERVAL == 0:
 			logger.info('iteration = {}, saving checkpoint ...'.format(iteration))
