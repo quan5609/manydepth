@@ -3,7 +3,7 @@ DATASETS:
   TRAIN: ("kitti_train",)
   TEST: ("kitti_train",)
   TRAIN_SPLIT: "train"
-  TEST_SPLIT: "val"
+  TEST_SPLIT: "train"
 
   USE_RIGHT_IMAGE: False
   CONSIDER_OUTSIDE_OBJS: True
@@ -57,6 +57,7 @@ MODEL:
 
   REDUCE_LOSS_NORM: True
   USE_SYNC_BN: True
+  # WEIGHT: './output/test/model_checkpoint_45000.pth'
 
 SOLVER:
   OPTIMIZER: 'adamw'
@@ -74,7 +75,7 @@ SOLVER:
   MAX_EPOCHS: 100
   DECAY_EPOCH_STEPS: [80, 90]
 
-  IMS_PER_BATCH: 8
+  IMS_PER_BATCH: 16
   EVAL_INTERVAL: 1000
 
 TEST:
@@ -82,4 +83,4 @@ TEST:
   DETECTIONS_THRESHOLD: 0.2
   METRIC: ['R40']
 
-OUTPUT_DIR: "./output/test"
+OUTPUT_DIR: "./output/pose_train"

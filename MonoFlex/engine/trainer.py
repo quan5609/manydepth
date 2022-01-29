@@ -102,16 +102,24 @@ def do_train(
 	# print(model.keys())
 
 	# !manydepth objects
-	frames_to_load = [0,-1]
-	pose_enc = teacher_model['pose_encoder']
-	pose_dec = teacher_model['pose']
-	pose_enc.train()
-	pose_dec.train()
-	for p in pose_enc.parameters():
-		p.requires_grad == False
+	if teacher_model:
+		logger.info("Freeze pose net")
+		frames_to_load = [0,-1]
+		pose_enc = teacher_model['pose_encoder']
+		pose_dec = teacher_model['pose']
+		pose_enc.eval()
+		pose_dec.eval()
+		for p in pose_enc.parameters():
+			p.requires_grad = False
 
-	for p in pose_dec.parameters():
-		p.requires_grad == False
+		for p in pose_dec.parameters():
+			p.requires_grad = False
+	else:
+		logger.info("Train pose net")
+		pose_enc = model['pose_encoder']
+		pose_dec = model['pose']
+		pose_enc.train()
+		pose_dec.train()
 
 	if comm.get_local_rank() == 0:
 		writer = SummaryWriter(os.path.join(cfg.OUTPUT_DIR, 'writer/{}/'.format(cfg.START_TIME)))
@@ -135,37 +143,6 @@ def do_train(
 		pose = transformation_from_parameters(
 					axisangle[:, 0], translation[:, 0], invert=True)
 		data[('relative_pose', -1)] = pose
-
-
-		# # predict poses
-		# pose_feats = {f_i: data["color", f_i, 0] for f_i in frames_to_load}
-		# if torch.cuda.is_available():
-		# 	pose_feats = {k: v.cuda() for k, v in pose_feats.items()}
-		# # compute pose from 0->-1, -1->-2, -2->-3 etc and multiply to find 0->-3
-		# for fi in frames_to_load[1:]:
-		# 	if fi < 0:
-		# 		pose_inputs = [pose_feats[fi], pose_feats[fi + 1]]
-		# 		pose_inputs = [pose_enc(torch.cat(pose_inputs, 1))]
-		# 		axisangle, translation = pose_dec(pose_inputs)
-		# 		pose = transformation_from_parameters(
-		# 			axisangle[:, 0], translation[:, 0], invert=True)
-
-		# 		# now find 0->fi pose
-		# 		if fi != -1:
-		# 			pose = torch.matmul(pose, data[('relative_pose', fi + 1)])
-
-		# 	else:
-		# 		pose_inputs = [pose_feats[fi - 1], pose_feats[fi]]
-		# 		pose_inputs = [pose_enc(torch.cat(pose_inputs, 1))]
-		# 		axisangle, translation = pose_dec(pose_inputs)
-		# 		pose = transformation_from_parameters(
-		# 			axisangle[:, 0], translation[:, 0], invert=False)
-
-		# 		# now find 0->fi pose
-		# 		if fi != 1:
-		# 			pose = torch.matmul(pose, data[('relative_pose', fi - 1)])
-
-		# 	data[('relative_pose', fi)] = pose
 
 		lookup_frames = [prev_input_color]
 		lookup_frames = torch.stack(lookup_frames, 1)  # batch x frames x 3 x h x w
@@ -201,13 +178,6 @@ def do_train(
 												invK,
 												model['encoder'].min_depth_bin, model['encoder'].max_depth_bin)
 		
-
-
-
-
-
-
-
 
 		# images = data["images"].to(device)
 		# targets = [target.to(device) for target in data["targets"]]
@@ -319,7 +289,7 @@ def do_train(
 
 		# 		eval_iteration += 1
 			
-			model.train()
+			# model.train()
 			comm.synchronize()
 
 	total_training_time = time.time() - start_training_time

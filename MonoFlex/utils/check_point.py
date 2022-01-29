@@ -1,6 +1,7 @@
 import logging
 import os
 import pdb
+from tabnanny import check
 
 import torch
 
@@ -58,8 +59,10 @@ class Checkpointer():
             self.logger.info("No checkpoint found. Initializing model from scratch")
             return {}
         self.logger.info("Loading checkpoint from {}".format(f))
-        
-        checkpoint = self._load_file(f)
+        #! HARD CODE
+        # f = './output/test/model_checkpoint_45000.pth'
+        # print(f)
+        checkpoint = self._load_file(f)['model']
         self._load_model(checkpoint)
 
         if 'iteration' in checkpoint:
@@ -102,7 +105,8 @@ class Checkpointer():
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint):
-        load_state_dict(self.model, checkpoint.pop("model"))
+        for k,v in self.model.items():
+            load_state_dict(v, checkpoint.pop(k))
 
 
 class DetectronCheckpointer(Checkpointer):

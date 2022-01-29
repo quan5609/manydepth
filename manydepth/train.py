@@ -30,4 +30,8 @@ seed_all(opts.pytorch_random_seed)
 
 if __name__ == "__main__":
     trainer = Trainer(opts)
-    trainer.train()
+
+    if opts.eval_object:
+        trainer.val()
+    else:
+        trainer.train()

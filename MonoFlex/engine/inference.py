@@ -1,5 +1,8 @@
 import logging
+logging.basicConfig(level = logging.INFO)
+
 import pdb
+from MonoFlex import data
 import numpy as np
 import os
 import torch
@@ -13,20 +16,91 @@ from data.datasets.evaluation import evaluate_python
 from data.datasets.evaluation import generate_kitti_3d_detection
 
 from .visualize_infer import show_image_with_boxes, show_image_with_boxes_test
+from manydepth.layers import SSIM, BackprojectDepth, Project3D, transformation_from_parameters, \
+    disp_to_depth, get_smooth_loss, compute_depth_errors
 
-def compute_on_dataset(model, data_loader, device, predict_folder, timer=None, vis=False, 
+def compute_on_dataset(model, teacher_model, data_loader, device, predict_folder, timer=None, vis=False, 
                         eval_score_iou=False, eval_depth=False, eval_trunc_recall=False):
     
-    model.eval()
+    for k,v in model.items():
+        v.eval()
     cpu_device = torch.device("cpu")
     dis_ious = defaultdict(list)
     depth_errors = defaultdict(list)
 
+    # !manydepth objects
+    if teacher_model:
+        print('Freeze pose net')
+        frames_to_load = [0,-1]
+        pose_enc = teacher_model['pose_encoder']
+        pose_dec = teacher_model['pose']
+        pose_enc.eval()
+        pose_dec.eval()
+        for p in pose_enc.parameters():
+            p.requires_grad = False
+
+        for p in pose_dec.parameters():
+            p.requires_grad = False
+    else:
+        print('Train pose net')
+        pose_enc = model['pose_encoder']
+        pose_dec = model['pose']
+        pose_enc.eval()
+        pose_dec.eval()
+
+    for k,v in model.items():
+        v.eval()
     differ_ious = []
     with torch.no_grad():
-        for idx, batch in enumerate(tqdm(data_loader)):
-            images, targets, image_ids = batch["images"], batch["targets"], batch["img_ids"]
-            images = images.to(device)
+        for idx, data in enumerate(tqdm(data_loader)):
+            image_ids =  data["img_ids"]
+
+            input_color = data["images"].to(device).tensors
+            prev_input_color = data["prev_images"].to(device).tensors
+
+            pose_inputs = [prev_input_color, input_color]
+            pose_inputs = [pose_enc(torch.cat(pose_inputs, 1))]
+            axisangle, translation = pose_dec(pose_inputs)
+            pose = transformation_from_parameters(
+                        axisangle[:, 0], translation[:, 0], invert=True)
+            data[('relative_pose', -1)] = pose
+
+            lookup_frames = [prev_input_color]
+            lookup_frames = torch.stack(lookup_frames, 1)  # batch x frames x 3 x h x w
+            
+
+            relative_poses = [data[('relative_pose', -1)]]
+            relative_poses = torch.stack(relative_poses, 1)
+
+            # !HARDCODE QUARTER SCALING
+            targets = [target.to(device) for target in data["targets"]]
+            calib_list = [torch.from_numpy(target.get_field('calib').P.copy()) for target in targets]
+            
+
+            for i, K in enumerate(calib_list):
+                K[0, :] /=  (2 ** 2)
+                K[1, :] /=  (2 ** 2)
+                K = torch.cat([K, torch.Tensor([0,0,0,1]).float().unsqueeze(0)], 0)
+                calib_list[i] = K
+
+            inv_calib_list = [torch.inverse(calib) for calib in calib_list]
+            K = torch.stack(calib_list, 0)
+            invK = torch.stack(inv_calib_list, 0)
+
+            if torch.cuda.is_available():
+                lookup_frames = lookup_frames.cuda()
+                relative_poses = relative_poses.cuda()
+                K = K.cuda().float()
+                invK = invK.cuda().float()
+
+            output, lowest_cost, costvol = model['encoder'](input_color, lookup_frames,
+                                                    relative_poses,
+                                                    K,
+                                                    invK,
+                                                    model['encoder'].min_depth_bin, model['encoder'].max_depth_bin)
+
+            # images, targets, image_ids = batch["images"], batch["targets"], batch["img_ids"]
+            # images = images.to(device)
 
             # extract label data for visualize
             vis_target = targets[0]
@@ -35,7 +109,8 @@ def compute_on_dataset(model, data_loader, device, predict_folder, timer=None, v
             if timer:
                 timer.tic()
 
-            output, eval_utils, visualize_preds = model(images, targets)
+            output, eval_utils, visualize_preds = model['depth'](output, targets, is_test = True, training_phase = 'object')["mono3d"]
+            # output, eval_utils, visualize_preds = model(images, targets)
             output = output.to(cpu_device)
 
             if timer:
@@ -64,6 +139,7 @@ def compute_on_dataset(model, data_loader, device, predict_folder, timer=None, v
 
 def inference(
         model,
+        teacher_model,
         data_loader,
         dataset_name,
         eval_types=("detections",),
@@ -85,7 +161,7 @@ def inference(
     inference_timer = Timer()
     total_timer.tic()
 
-    dis_ious = compute_on_dataset(model, data_loader, device, predict_folder, 
+    dis_ious = compute_on_dataset(model, teacher_model, data_loader, device, predict_folder, 
                                 inference_timer, vis, eval_score_iou)
     comm.synchronize()
 

@@ -180,7 +180,7 @@ class MonodepthOptions:
                                    nargs="+",
                                    type=str,
                                    help="models to load",
-                                   default=["pose_encoder", "pose"])
+                                   default=["encoder", "depth", "pose_encoder", "pose"])
 
           # LOGGING options
           self.parser.add_argument("--log_frequency",
@@ -246,6 +246,12 @@ class MonodepthOptions:
           self.parser.add_argument('--eval_teacher',
                                    action='store_true',
                                    help='If set, the teacher network will be evaluated')
+          self.parser.add_argument('--eval_object',
+                                   action='store_true',
+                                   help='If set, eval the 3dod')
+          self.parser.add_argument('--train_teacher',
+                                   action='store_true',
+                                   help='If set, train posenet in 3dod')
 
     def parse(self):
         self.options = self.parser.parse_args()

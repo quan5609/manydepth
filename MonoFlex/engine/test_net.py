@@ -6,7 +6,7 @@ from engine.inference import inference, inference_all_depths
 from utils import comm
 from utils.miscellaneous import mkdir
 
-def run_test(cfg, model, vis, eval_score_iou, eval_all_depths=True):
+def run_test(cfg, model, teacher_model, vis, eval_score_iou, eval_all_depths=True):
     eval_types = ("detection",)
     output_folders = [None] * len(cfg.DATASETS.TEST)
     dataset_names = cfg.DATASETS.TEST
@@ -23,6 +23,7 @@ def run_test(cfg, model, vis, eval_score_iou, eval_all_depths=True):
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
         result_dict, result_str, dis_ious = inference_fnc(
             model,
+            teacher_model,
             data_loaders_val,
             dataset_name=dataset_name,
             eval_types=eval_types,
